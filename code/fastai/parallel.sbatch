@@ -10,7 +10,7 @@
 #SBATCH --error=error-parallel.%j
 #SBATCH --time=00:10:00
 #SBATCH --partition=dc-gpu
-##SBATCH --reservation=training2529_day1 # For today only
+##SBATCH --reservation=training2529 # For today only
 
 export NCCL_DEBUG=INFO
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK

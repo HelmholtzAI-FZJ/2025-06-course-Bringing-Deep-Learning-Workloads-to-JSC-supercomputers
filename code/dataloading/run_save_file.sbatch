@@ -10,7 +10,7 @@
 #SBATCH --output=%j.out
 #SBATCH --error=%j.err
 
-#SBATCH --reservation=training2529_day2
+#SBATCH --reservation=training2529
 
 export SRUN_CPUS_PER_TASK="$SLURM_CPUS_PER_TASK"
 source $HOME/course/sc_venv_template/activate.sh

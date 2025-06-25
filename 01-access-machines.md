@@ -763,7 +763,7 @@ Simple Linux Utility for Resource Management
 #SBATCH --error=error.%j
 #SBATCH --time=00:01:00          # For how long can it run?
 #SBATCH --partition=dc-gpu         # Machine partition
-#SBATCH --reservation=training2529_day1 # For today only
+#SBATCH --reservation=training2529 # For today only
 
 module load Stages/2025
 module load GCC OpenMPI PyTorch  # Load the correct modules on the compute node(s)
@@ -812,7 +812,7 @@ squeue --me
 ### Reservations
 
 - Some partitions have reservations, which means that only certain users can use them at certain times.
-- For this course, it's called `training2529_day1`
+- For this course, it's called `training2529`
 
 --- 
 
@@ -969,7 +969,7 @@ code fastai.sbatch
 #SBATCH --error=error.%j
 #SBATCH --time=00:20:00
 #SBATCH --partition=dc-gpu
-#SBATCH --reservation=training2529_day1 # For today only
+#SBATCH --reservation=training2529 # For today only
 
 cd $HOME/course/
 source sc_venv_template/activate.sh # Now we finally use the fastai module
