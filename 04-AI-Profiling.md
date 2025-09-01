@@ -17,18 +17,16 @@ date: March 25th, 2025
 
 ---
 
-##  Base system
+##  Single Node Communications
 
-- Host
 
-- Devices (4 GPUs)
 
-- Host-Device PCIe bus connection
+##  Base System
 
 
 ![](images/profiling/base_system.png)
 
-##  Naive communication
+##  Naive communication (staging through host memory)
 
 **Data Path:** 
 
@@ -39,7 +37,7 @@ GPU 0  →  PCI Bus  →  System Memory →  PCI Bus →  GPU 1
 ![](images/profiling/host_staging_copy.png)
 
 
-##  Peer-to-Peer communication
+##  PCI Bus Peer-to-Peer (P2P) communication
 
 **Data Path:** 
 
@@ -49,47 +47,28 @@ GPU 0  →  PCI Bus  →  GPU 1
 
 ![](images/profiling/p2p-memory-access.png)
 
-
-##  NVLink PCIe Bridge communication
-
-**Data Path (same VLink PCIe Bridge)** 
-
-```mermaid
-GPU 0  →  NVLink PCIe Bridge  →  GPU 1
-```
-
-![](images/profiling/NVlink_per_node.png)
+GPUs on the same PCI directly access each other’s memory without staging through host (CPU) memory
 
 
-##  NVLink PCIe Bridge communication
-**Data Path (different VLink PCIe Bridge):** 
-
-```mermaid
-GPU 0  →  PCI Bus  →  GPU 2
-```
-
-![](images/profiling/NVlinkp2p.png)
-
-
-##  NVLink Switch communication
+## GPUDirect P2P communication (NVLink)
 
 **Data Path** 
 
 ```mermaid
-GPU 0  →  NVSwitch  →  GPU 1
-```
-
-![](images/profiling/NVswitch_00.png)
-
-
-##  NVLink Switch communication
-
-**Data Path** 
-
-```mermaid
-GPU 0  →  NVSwitch  →  GPU 2
+GPU 0  →  NVLink  →  GPU 2
 ```
 ![](images/profiling/NVswitch_01.png)
+
+GPUs use NVLink to directly access each other’s memory without staging through host (CPU) memory
+
+
+## Throughput Comparison
+
+| Communication Type | Throughput   |
+|---------------------|------------------------|
+| Naive communication               | ~16 GB/s              <span style="font-size:2em">🐢</span> |
+| PCIe Bus P2P communication       | ~32 GB/s              <span style="font-size:2em">🚗</span> |
+| GPUDirect P2P communication             | 600 GB/s total per GPU          <span style="font-size:2em">🏎️</span> |
 
 
 ##  How we can check?!
@@ -103,12 +82,69 @@ srun -n1 -A {your_account} -p dc-gpu-devel  --gres=gpu:4 nvidia-smi topo -p2p r
 
 This means all the GPUs can communicate via P2P with each other through PCIe.
 
+##  How we can check?!
 ```mermaid
 srun -n1 -A {your_account} -p dc-gpu-devel  --gres=gpu:4 nvidia-smi topo -p2p n
 ```
 ![](images/profiling/p2pr.png)
 
 This means all the GPUs can communicate via P2P with each other through NVLink.
+
+
+## Multinode Commumications
+
+
+## GPUDirect Without RDMA Communication
+
+![](images/profiling/multi_node_without_rdma.png)
+
+GPU data is staged through host memory, sent via PCIe to the InfiniBand NIC, and delivered to the remote GPU
+
+## GPUDirect With RDMA Communication
+
+![](images/profiling/multi_node_with_rdma.png)
+
+Enable external devices like InfiniBand NIC directly access GPU memory for multinode transfers.
+
+
+
+## Throughput Comparison
+
+| Communication Type | Throughput   |
+|---------------------|------------------------|
+| GPUDirect Without RDMA              | ~16 GB/s              <span style="font-size:2em">🐢</span> |
+| GPUDirect With RDMA             | ~ 50 GB/s (2 HDR InfiniBand)          <span style="font-size:2em">🏎️</span> |
+
+
+## What We Should Remember?
+
+
+- Single node training: make sure GPUDirect P2P is enabaled
+
+- Multi node training: make sure GPUDirect With RDMA uses 
+
+
+
+## What is profiling?
+
+Profiling is the first step in optimizing your application. By profiling, we can findout where most of the execution time is spent.
+
+
+## NVIDIA profiling Tools
+
+![](images/profiling/nsight_flowchart_systemcomputegraphics.png)
+
+
+## Nsight Systems Timeline View
+
+- Unified View
+- Performance Insight
+- Multi-Domain Analysis
+- Interactive Exploration
+- Scalability Support
+- Developer-Friendly
+
+
 
 ## What this code does 
 

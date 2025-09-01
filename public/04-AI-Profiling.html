@@ -244,57 +244,150 @@ be transferred per unit of time between GPUs, CPUs, or nodes.</p></li>
 <li class="fragment"><p>Device: GPU + GPU memory.</p></li>
 </ul>
 </section>
+<section id="single-node-communications" class="slide level2">
+<h2>Single Node Communications</h2>
+</section>
 <section id="base-system" class="slide level2">
-<h2>Base system</h2>
-<ul>
-<li class="fragment"><p>Host</p></li>
-<li class="fragment"><p>Devices (4 GPUs)</p></li>
-<li class="fragment"><p>Host-Device PCIe bus connection</p></li>
-</ul>
+<h2>Base System</h2>
 <p><img data-src="images/profiling/base_system.png" /></p>
 </section>
-<section id="naive-communication" class="slide level2">
-<h2>Naive communication</h2>
+<section id="naive-communication-staging-through-host-memory"
+class="slide level2">
+<h2>Naive communication (staging through host memory)</h2>
 <p><strong>Data Path:</strong></p>
 <pre class="mermaid"><code>GPU 0  →  PCI Bus  →  System Memory →  PCI Bus →  GPU 1</code></pre>
 <p><img data-src="images/profiling/host_staging_copy.png" /></p>
 </section>
-<section id="peer-to-peer-communication" class="slide level2">
-<h2>Peer-to-Peer communication</h2>
+<section id="pci-bus-peer-to-peer-p2p-communication"
+class="slide level2">
+<h2>PCI Bus Peer-to-Peer (P2P) communication</h2>
 <p><strong>Data Path:</strong></p>
 <pre class="mermaid"><code>GPU 0  →  PCI Bus  →  GPU 1</code></pre>
 <p><img data-src="images/profiling/p2p-memory-access.png" /></p>
+<p>GPUs on the same PCI directly access each other’s memory without
+staging through host (CPU) memory</p>
 </section>
-<section id="nvlink-pcie-bridge-communication" class="slide level2">
-<h2>NVLink PCIe Bridge communication</h2>
-<p><strong>Data Path (same VLink PCIe Bridge)</strong></p>
-<pre class="mermaid"><code>    GPU0[GPU 0] --&gt; Bridge[NVLink PCIe Bridge] --&gt; GPU1[GPU 1]
-
-    classDef gpu fill:#ffcccc,stroke:#333,stroke-width:2px;
-    classDef bridge fill:#cce5ff,stroke:#333,stroke-width:2px;
-
-    class GPU0,GPU1 gpu;
-    class Bridge bridge;
-</code></pre>
-<p><img data-src="images/profiling/NVlink_per_node.png" /></p>
-</section>
-<section id="nvlink-pcie-bridge-communication-1" class="slide level2">
-<h2>NVLink PCIe Bridge communication</h2>
-<p><strong>Data Path (different VLink PCIe Bridge):</strong></p>
-<pre class="mermaid"><code>GPU 0  →  PCI Bus  →  GPU 2</code></pre>
-<p><img data-src="images/profiling/NVlinkp2p.png" /></p>
-</section>
-<section id="nvlink-switch-communication" class="slide level2">
-<h2>NVLink Switch communication</h2>
+<section id="gpudirect-p2p-communication-nvlink" class="slide level2">
+<h2>GPUDirect P2P communication (NVLink)</h2>
 <p><strong>Data Path</strong></p>
-<pre class="mermaid"><code>GPU 0  →  NVSwitch  →  GPU 1</code></pre>
-<p><img data-src="images/profiling/NVswitch_00.png" /></p>
-</section>
-<section id="nvlink-switch-communication-1" class="slide level2">
-<h2>NVLink Switch communication</h2>
-<p><strong>Data Path</strong></p>
-<pre class="mermaid"><code>GPU 0  →  NVSwitch  →  GPU 2</code></pre>
+<pre class="mermaid"><code>GPU 0  →  NVLink  →  GPU 2</code></pre>
 <p><img data-src="images/profiling/NVswitch_01.png" /></p>
+<p>GPUs use NVLink to directly access each other’s memory without
+staging through host (CPU) memory</p>
+</section>
+<section id="throughput-comparison" class="slide level2">
+<h2>Throughput Comparison</h2>
+<table>
+<colgroup>
+<col style="width: 46%" />
+<col style="width: 53%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Communication Type</th>
+<th>Throughput</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Naive communication</td>
+<td>~16 GB/s <span style="font-size:2em">🐢</span></td>
+</tr>
+<tr class="even">
+<td>PCIe Bus P2P communication</td>
+<td>~32 GB/s <span style="font-size:2em">🚗</span></td>
+</tr>
+<tr class="odd">
+<td>GPUDirect P2P communication</td>
+<td>600 GB/s total per GPU <span style="font-size:2em">🏎️</span></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="how-we-can-check" class="slide level2">
+<h2>How we can check?!</h2>
+<pre class="mermaid"><code>srun -n1 -A {your_account} -p dc-gpu-devel  --gres=gpu:4 nvidia-smi topo -p2p r</code></pre>
+<p><img data-src="images/profiling/p2pr.png" /></p>
+<p>This means all the GPUs can communicate via P2P with each other
+through PCIe.</p>
+</section>
+<section id="how-we-can-check-1" class="slide level2">
+<h2>How we can check?!</h2>
+<pre class="mermaid"><code>srun -n1 -A {your_account} -p dc-gpu-devel  --gres=gpu:4 nvidia-smi topo -p2p n</code></pre>
+<p><img data-src="images/profiling/p2pr.png" /></p>
+<p>This means all the GPUs can communicate via P2P with each other
+through NVLink.</p>
+</section>
+<section id="multinode-commumications" class="slide level2">
+<h2>Multinode Commumications</h2>
+</section>
+<section id="gpudirect-without-rdma-communication" class="slide level2">
+<h2>GPUDirect Without RDMA Communication</h2>
+<p><img data-src="images/profiling/multi_node_without_rdma.png" /></p>
+<p>GPU data is staged through host memory, sent via PCIe to the
+InfiniBand NIC, and delivered to the remote GPU</p>
+</section>
+<section id="gpudirect-with-rdma-communication" class="slide level2">
+<h2>GPUDirect With RDMA Communication</h2>
+<p><img data-src="images/profiling/multi_node_with_rdma.png" /></p>
+<p>Enable external devices like InfiniBand NIC directly access GPU
+memory for multinode transfers.</p>
+</section>
+<section id="throughput-comparison-1" class="slide level2">
+<h2>Throughput Comparison</h2>
+<table>
+<colgroup>
+<col style="width: 46%" />
+<col style="width: 53%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Communication Type</th>
+<th>Throughput</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>GPUDirect Without RDMA</td>
+<td>~16 GB/s <span style="font-size:2em">🐢</span></td>
+</tr>
+<tr class="even">
+<td>GPUDirect With RDMA</td>
+<td>~ 50 GB/s (2 HDR InfiniBand) <span
+style="font-size:2em">🏎️</span></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="what-we-should-remember" class="slide level2">
+<h2>What We Should Remember?</h2>
+<ul>
+<li class="fragment"><p>Single node training: make sure GPUDirect P2P is
+enabaled</p></li>
+<li class="fragment"><p>Multi node training: make sure GPUDirect With
+RDMA uses</p></li>
+</ul>
+</section>
+<section id="what-is-profiling" class="slide level2">
+<h2>What is profiling?</h2>
+<p>Profiling is the first step in optimizing your application. By
+profiling, we can findout where most of the execution time is spent.</p>
+</section>
+<section id="nvidia-profiling-tools" class="slide level2">
+<h2>NVIDIA profiling Tools</h2>
+<p><img
+data-src="images/profiling/nsight_flowchart_systemcomputegraphics.png" /></p>
+</section>
+<section id="nsight-systems-timeline-view" class="slide level2">
+<h2>Nsight Systems Timeline View</h2>
+<ul>
+<li class="fragment">Unified View</li>
+<li class="fragment">Performance Insight</li>
+<li class="fragment">Multi-Domain Analysis</li>
+<li class="fragment">Interactive Exploration</li>
+<li class="fragment">Scalability Support</li>
+<li class="fragment">Developer-Friendly</li>
+</ul>
 </section>
 <section id="what-this-code-does" class="slide level2">
 <h2>What this code does</h2>
@@ -351,8 +444,8 @@ repo.</p>
 not modify the TODOs for now</strong>. The code is already working, so
 you don’t need to make any changes at this point.</p></li>
 <li class="fragment"><p>Now run:</p>
-<div class="sourceCode" id="cb7"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ex">sbatch</span> run_to_distributed_training.sbatch </span></code></pre></div></li>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">sbatch</span> run_to_distributed_training.sbatch </span></code></pre></div></li>
 <li class="fragment"><p>Spoiler alert 🚨</p></li>
 <li class="fragment"><p>The code won’t work.</p></li>
 <li class="fragment"><p>Check the output and error files</p></li>
@@ -368,16 +461,16 @@ node.</li>
 <li class="fragment"><p><strong>Comment out</strong> lines 76
 <strong>to</strong> 135.</p></li>
 <li class="fragment"><p>Activate your environment:</p>
-<div class="sourceCode" id="cb8"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> <span class="va">$HOME</span>/course/sc_venv_template/activate.sh</span></code></pre></div></li>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> <span class="va">$HOME</span>/course/sc_venv_template/activate.sh</span></code></pre></div></li>
 <li class="fragment"><p>Run:</p>
-<div class="sourceCode" id="cb9"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> to_distributed_training.py</span></code></pre></div></li>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> to_distributed_training.py</span></code></pre></div></li>
 <li class="fragment"><p><strong>Uncomment back</strong> lines
 76-135.</p></li>
 <li class="fragment"><p>Finally, run your job again 🚀:</p>
-<div class="sourceCode" id="cb10"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ex">sbatch</span> run_to_distributed_training.sbatch</span></code></pre></div></li>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">sbatch</span> run_to_distributed_training.sbatch</span></code></pre></div></li>
 </ul></li>
 </ul>
 </section>
@@ -438,11 +531,11 @@ llview).</p></li>
 <li class="fragment"><p>At line 3 in file
 <strong><code>run_to_distributed_training.sbatch</code></strong>, we
 increase the number of GPUs to 4:</p>
-<div class="sourceCode" id="cb11"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co">#SBATCH --gres=gpu:4</span></span></code></pre></div></li>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co">#SBATCH --gres=gpu:4</span></span></code></pre></div></li>
 <li class="fragment"><p>And run our job again</p>
-<div class="sourceCode" id="cb12"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ex">sbatch</span> run_to_distributed_training.sbatch</span></code></pre></div></li>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ex">sbatch</span> run_to_distributed_training.sbatch</span></code></pre></div></li>
 </ul>
 </section>
 <section id="llview-3" class="slide level2">
@@ -616,43 +709,43 @@ GPUs.</li>
 <ol type="1">
 <li class="fragment"><p>Import
 <strong><code>distributed_utils</code></strong> file at line 11:</p>
-<div class="sourceCode" id="cb13"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># This file contains utility_functions for distributed training.</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> distributed_utils <span class="im">import</span> <span class="op">*</span></span></code></pre></div></li>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># This file contains utility_functions for distributed training.</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> distributed_utils <span class="im">import</span> <span class="op">*</span></span></code></pre></div></li>
 <li class="fragment"><p>Then <strong>remove</strong> lines 65 and
 66:</p>
-<div class="sourceCode" id="cb14"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co">## </span><span class="al">TODO</span><span class="co"> 2-3: Remove this line and replace it with a call to the utility function setup().</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>device <span class="op">=</span> torch.device(<span class="st">&#39;cuda&#39;</span> <span class="cf">if</span> torch.cuda.is_available() <span class="cf">else</span> <span class="st">&#39;cpu&#39;</span>)</span></code></pre></div></li>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co">## </span><span class="al">TODO</span><span class="co"> 2-3: Remove this line and replace it with a call to the utility function setup().</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>device <span class="op">=</span> torch.device(<span class="st">&#39;cuda&#39;</span> <span class="cf">if</span> torch.cuda.is_available() <span class="cf">else</span> <span class="st">&#39;cpu&#39;</span>)</span></code></pre></div></li>
 <li class="fragment"><p>and <strong>add</strong> at line 65 a call to
 the method <strong><code>setup()</code></strong> defined in
 <strong><code>distributed_utils.py</code></strong>:</p>
-<div class="sourceCode" id="cb15"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Initialize a communication group and return the right identifiers.</span></span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>local_rank, rank, device <span class="op">=</span> setup()</span></code></pre></div></li>
+<div class="sourceCode" id="cb14"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Initialize a communication group and return the right identifiers.</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>local_rank, rank, device <span class="op">=</span> setup()</span></code></pre></div></li>
 </ol></li>
 </ul>
 </section>
 <section id="setup-communication-1" class="slide level2">
 <h2>Setup communication</h2>
 <p>What is in the <strong><code>setup()</code></strong> method ?</p>
-<div class="sourceCode" id="cb16"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> setup():</span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Initializes a communication group using &#39;nccl&#39; as the backend for GPU communication.</span></span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    torch.distributed.init_process_group(backend<span class="op">=</span><span class="st">&#39;nccl&#39;</span>)</span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Get the identifier of each process within a node</span></span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    local_rank <span class="op">=</span> <span class="bu">int</span>(os.getenv(<span class="st">&#39;LOCAL_RANK&#39;</span>))</span>
-<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Get the global identifier of each process within the distributed system</span></span>
-<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>    rank <span class="op">=</span> <span class="bu">int</span>(os.environ[<span class="st">&#39;RANK&#39;</span>])</span>
-<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Creates a torch.device object that represents the GPU to be used by this process.</span></span>
-<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>    device <span class="op">=</span> torch.device(<span class="st">&#39;cuda&#39;</span>, local_rank)</span>
-<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Sets the default CUDA device for the current process, </span></span>
-<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>    <span class="co"># ensuring all subsequent CUDA operations are performed on the specified GPU device.</span></span>
-<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>    torch.cuda.set_device(device)</span>
-<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Different random seed for each process.</span></span>
-<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>    torch.random.manual_seed(<span class="dv">1000</span> <span class="op">+</span> torch.distributed.get_rank())</span>
-<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> local_rank, rank, device</span></code></pre></div>
+<div class="sourceCode" id="cb15"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> setup():</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Initializes a communication group using &#39;nccl&#39; as the backend for GPU communication.</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    torch.distributed.init_process_group(backend<span class="op">=</span><span class="st">&#39;nccl&#39;</span>)</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Get the identifier of each process within a node</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    local_rank <span class="op">=</span> <span class="bu">int</span>(os.getenv(<span class="st">&#39;LOCAL_RANK&#39;</span>))</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Get the global identifier of each process within the distributed system</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>    rank <span class="op">=</span> <span class="bu">int</span>(os.environ[<span class="st">&#39;RANK&#39;</span>])</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Creates a torch.device object that represents the GPU to be used by this process.</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>    device <span class="op">=</span> torch.device(<span class="st">&#39;cuda&#39;</span>, local_rank)</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Sets the default CUDA device for the current process, </span></span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>    <span class="co"># ensuring all subsequent CUDA operations are performed on the specified GPU device.</span></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>    torch.cuda.set_device(device)</span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Different random seed for each process.</span></span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>    torch.random.manual_seed(<span class="dv">1000</span> <span class="op">+</span> torch.distributed.get_rank())</span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> local_rank, rank, device</span></code></pre></div>
 </section>
 <section id="distributedsampler" class="slide level2">
 <h2>DistributedSampler</h2>
@@ -662,13 +755,13 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb16-1"><a h
 <li class="fragment"><p>At line 76, instantiate a
 <strong>DistributedSampler</strong> object for each set to ensure that
 each process gets a different subset of the data.</p>
-<div class="sourceCode" id="cb17"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># DistributedSampler object for each set to ensure that each process gets a different subset of the data.</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>train_sampler <span class="op">=</span> torch.utils.data.distributed.DistributedSampler(train_dataset, </span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>                                                                shuffle<span class="op">=</span><span class="va">True</span>, </span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>                                                                seed<span class="op">=</span>args.seed)</span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>val_sampler <span class="op">=</span> torch.utils.data.distributed.DistributedSampler(val_dataset)</span>
-<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>test_sampler <span class="op">=</span> torch.utils.data.distributed.DistributedSampler(test_dataset)</span></code></pre></div></li>
+<div class="sourceCode" id="cb16"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># DistributedSampler object for each set to ensure that each process gets a different subset of the data.</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>train_sampler <span class="op">=</span> torch.utils.data.distributed.DistributedSampler(train_dataset, </span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>                                                                shuffle<span class="op">=</span><span class="va">True</span>, </span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>                                                                seed<span class="op">=</span>args.seed)</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>val_sampler <span class="op">=</span> torch.utils.data.distributed.DistributedSampler(val_dataset)</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>test_sampler <span class="op">=</span> torch.utils.data.distributed.DistributedSampler(test_dataset)</span></code></pre></div></li>
 </ul></li>
 </ul>
 </section>
@@ -681,12 +774,12 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb17-1"><a h
 <strong><code>shuffle=True</code></strong> in the DataLoader of
 train_loader and <strong>REPLACE</strong> it by
 <strong><code>sampler=train_sampler</code></strong></p>
-<div class="sourceCode" id="cb18"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>train_loader <span class="op">=</span> DataLoader(train_dataset, </span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>                        batch_size<span class="op">=</span>args.batch_size, </span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>                        sampler<span class="op">=</span>train_sampler, <span class="co"># pass the sampler argument to the DataLoader</span></span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>                        num_workers<span class="op">=</span><span class="bu">int</span>(os.getenv(<span class="st">&#39;SLURM_CPUS_PER_TASK&#39;</span>)),</span>
-<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>                        pin_memory<span class="op">=</span><span class="va">True</span>)</span></code></pre></div></li>
+<div class="sourceCode" id="cb17"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>train_loader <span class="op">=</span> DataLoader(train_dataset, </span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>                        batch_size<span class="op">=</span>args.batch_size, </span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>                        sampler<span class="op">=</span>train_sampler, <span class="co"># pass the sampler argument to the DataLoader</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>                        num_workers<span class="op">=</span><span class="bu">int</span>(os.getenv(<span class="st">&#39;SLURM_CPUS_PER_TASK&#39;</span>)),</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>                        pin_memory<span class="op">=</span><span class="va">True</span>)</span></code></pre></div></li>
 </ul></li>
 </ul>
 </section>
@@ -697,21 +790,21 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb18-1"><a h
 <ul>
 <li class="fragment"><p>At line 90, pass <strong>val_sampler</strong> to
 the sampler argument of the val_dataLoader</p>
-<div class="sourceCode" id="cb19"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>val_loader <span class="op">=</span> DataLoader(val_dataset,</span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>                        batch_size<span class="op">=</span>args.batch_size,</span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>                        sampler<span class="op">=</span>val_sampler, <span class="co"># pass the sampler argument to the DataLoader</span></span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>                        pin_memory<span class="op">=</span><span class="va">True</span>)</span></code></pre></div></li>
+<div class="sourceCode" id="cb18"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>val_loader <span class="op">=</span> DataLoader(val_dataset,</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>                        batch_size<span class="op">=</span>args.batch_size,</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>                        sampler<span class="op">=</span>val_sampler, <span class="co"># pass the sampler argument to the DataLoader</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>                        pin_memory<span class="op">=</span><span class="va">True</span>)</span></code></pre></div></li>
 </ul></li>
 <li class="fragment"><p><strong>TODO 7</strong>💻📝:</p>
 <ul>
 <li class="fragment"><p>At line 94, pass <strong>test_sampler</strong>
 to the sampler argument of the test_dataLoader</p>
-<div class="sourceCode" id="cb20"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>test_loader <span class="op">=</span> DataLoader(test_dataset,</span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>                        batch_size<span class="op">=</span>args.test_batch_size,</span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>                        sampler<span class="op">=</span>test_sampler, <span class="co"># pass the sampler argument to the DataLoader</span></span>
-<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>                        pin_memory<span class="op">=</span><span class="va">True</span>)    </span></code></pre></div></li>
+<div class="sourceCode" id="cb19"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>test_loader <span class="op">=</span> DataLoader(test_dataset,</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>                        batch_size<span class="op">=</span>args.test_batch_size,</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>                        sampler<span class="op">=</span>test_sampler, <span class="co"># pass the sampler argument to the DataLoader</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>                        pin_memory<span class="op">=</span><span class="va">True</span>)    </span></code></pre></div></li>
 </ul></li>
 </ul>
 </section>
@@ -723,12 +816,12 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb20-1"><a h
 <li class="fragment"><p>At line 103, wrap the model in a
 <strong>DistributedDataParallel</strong> (DDP) module to parallelize the
 training across multiple GPUs.</p>
-<div class="sourceCode" id="cb21"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Wrap the model in DistributedDataParallel module </span></span>
-<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> torch.nn.parallel.DistributedDataParallel(</span>
-<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>    model,</span>
-<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>    device_ids<span class="op">=</span>[local_rank],</span>
-<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div></li>
+<div class="sourceCode" id="cb20"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Wrap the model in DistributedDataParallel module </span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> torch.nn.parallel.DistributedDataParallel(</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>    model,</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>    device_ids<span class="op">=</span>[local_rank],</span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div></li>
 </ul></li>
 </ul>
 </section>
@@ -740,9 +833,9 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb21-1"><a h
 <li class="fragment"><p>At line 117, <strong>set</strong> the current
 epoch for the dataset sampler to ensure proper data shuffling in each
 epoch</p>
-<div class="sourceCode" id="cb22"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Pass the current epoch to the sampler to ensure proper data shuffling in each epoch</span></span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>train_sampler.set_epoch(epoch)</span></code></pre></div></li>
+<div class="sourceCode" id="cb21"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Pass the current epoch to the sampler to ensure proper data shuffling in each epoch</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>train_sampler.set_epoch(epoch)</span></code></pre></div></li>
 </ul></li>
 </ul>
 </section>
@@ -753,9 +846,9 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb22-1"><a h
 <ul>
 <li class="fragment"><p>At <strong>lines 37 and 58</strong>, Obtain the
 global average loss across the GPUs.</p>
-<div class="sourceCode" id="cb23"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Return the global average loss.</span></span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>torch.distributed.all_reduce(result, torch.distributed.ReduceOp.AVG)</span></code></pre></div></li>
+<div class="sourceCode" id="cb22"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Return the global average loss.</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>torch.distributed.all_reduce(result, torch.distributed.ReduceOp.AVG)</span></code></pre></div></li>
 </ul></li>
 </ul>
 </section>
@@ -769,13 +862,13 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb23-1"><a h
 method defined in <strong><code>distributed_utils.py</code></strong> to
 allow only rank 0 to print in the output file.</p></li>
 <li class="fragment"><p>At <strong>line 123</strong></p>
+<div class="sourceCode" id="cb23"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># We use the utility function print0 to print messages only from rank 0.</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>print0(<span class="ss">f&#39;[</span><span class="sc">{</span>epoch<span class="op">+</span><span class="dv">1</span><span class="sc">}</span><span class="ss">/</span><span class="sc">{</span>args<span class="sc">.</span>epochs<span class="sc">}</span><span class="ss">] Train loss: </span><span class="sc">{</span>train_loss<span class="sc">:.5f}</span><span class="ss">, validation loss: </span><span class="sc">{</span>val_loss<span class="sc">:.5f}</span><span class="ss">&#39;</span>)</span></code></pre></div></li>
+<li class="fragment"><p>At <strong>line 135</strong></p>
 <div class="sourceCode" id="cb24"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># We use the utility function print0 to print messages only from rank 0.</span></span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>print0(<span class="ss">f&#39;[</span><span class="sc">{</span>epoch<span class="op">+</span><span class="dv">1</span><span class="sc">}</span><span class="ss">/</span><span class="sc">{</span>args<span class="sc">.</span>epochs<span class="sc">}</span><span class="ss">] Train loss: </span><span class="sc">{</span>train_loss<span class="sc">:.5f}</span><span class="ss">, validation loss: </span><span class="sc">{</span>val_loss<span class="sc">:.5f}</span><span class="ss">&#39;</span>)</span></code></pre></div></li>
-<li class="fragment"><p>At <strong>line 135</strong></p>
-<div class="sourceCode" id="cb25"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># We use the utility function print0 to print messages only from rank 0.</span></span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>print0(<span class="st">&#39;Final test loss:&#39;</span>, test_loss.item())</span></code></pre></div></li>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>print0(<span class="st">&#39;Final test loss:&#39;</span>, test_loss.item())</span></code></pre></div></li>
 </ul></li>
 </ul>
 </section>
@@ -783,17 +876,17 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb25-1"><a h
 <h2>print</h2>
 <p>The definition of the function <strong>print0</strong> is in
 <strong><code>distributed_utils.py</code></strong></p>
-<div class="sourceCode" id="cb26"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>functools.lru_cache(maxsize<span class="op">=</span><span class="va">None</span>)</span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> is_root_process():</span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Return whether this process is the root process.&quot;&quot;&quot;</span></span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> torch.distributed.get_rank() <span class="op">==</span> <span class="dv">0</span></span>
-<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> print0(<span class="op">*</span>args, <span class="op">**</span>kwargs):</span>
-<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Print something only on the root process.&quot;&quot;&quot;</span></span>
-<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> is_root_process():</span>
-<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="op">*</span>args, <span class="op">**</span>kwargs)</span></code></pre></div>
+<div class="sourceCode" id="cb25"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>functools.lru_cache(maxsize<span class="op">=</span><span class="va">None</span>)</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> is_root_process():</span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Return whether this process is the root process.&quot;&quot;&quot;</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> torch.distributed.get_rank() <span class="op">==</span> <span class="dv">0</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> print0(<span class="op">*</span>args, <span class="op">**</span>kwargs):</span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Print something only on the root process.&quot;&quot;&quot;</span></span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> is_root_process():</span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="op">*</span>args, <span class="op">**</span>kwargs)</span></code></pre></div>
 </section>
 <section id="save-model" class="slide level2">
 <h2>Save model</h2>
@@ -803,12 +896,12 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb26-1"><a h
 <li class="fragment"><p>At <strong>lines 130 and 139</strong>, replace
 torch.save method with the utility function save0 to allow only the
 process with rank 0 to save the model.</p>
+<div class="sourceCode" id="cb26"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co"># We allow only rank=0 to save the model</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>save0(model, <span class="st">&#39;model-best.pt&#39;</span>)</span></code></pre></div>
 <div class="sourceCode" id="cb27"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co"># We allow only rank=0 to save the model</span></span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>save0(model, <span class="st">&#39;model-best.pt&#39;</span>)</span></code></pre></div>
-<div class="sourceCode" id="cb28"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># We allow only rank=0 to save the model</span></span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>save0(model, <span class="st">&#39;model-final.pt&#39;</span>)</span></code></pre></div></li>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>save0(model, <span class="st">&#39;model-final.pt&#39;</span>)</span></code></pre></div></li>
 </ul></li>
 </ul>
 </section>
@@ -816,21 +909,21 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb28-1"><a h
 <h2>Save model</h2>
 <p>The method <strong>save0</strong> is defined in
 <strong><code>distributed_utils.py</code></strong></p>
-<div class="sourceCode" id="cb29"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>functools.lru_cache(maxsize<span class="op">=</span><span class="va">None</span>)</span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> is_root_process():</span>
-<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Return whether this process is the root process.&quot;&quot;&quot;</span></span>
-<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> torch.distributed.get_rank() <span class="op">==</span> <span class="dv">0</span></span>
-<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> save0(<span class="op">*</span>args, <span class="op">**</span>kwargs):</span>
-<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Pass the given arguments to `torch.save`, but only on the root</span></span>
-<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a><span class="co">    process.</span></span>
-<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a><span class="co">    &quot;&quot;&quot;</span></span>
-<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a>    <span class="co"># We do *not* want to write to the same location with multiple</span></span>
-<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>    <span class="co"># processes at the same time.</span></span>
-<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> is_root_process():</span>
-<span id="cb29-14"><a href="#cb29-14" aria-hidden="true" tabindex="-1"></a>        torch.save(<span class="op">*</span>args, <span class="op">**</span>kwargs)</span></code></pre></div>
+<div class="sourceCode" id="cb28"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>functools.lru_cache(maxsize<span class="op">=</span><span class="va">None</span>)</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> is_root_process():</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Return whether this process is the root process.&quot;&quot;&quot;</span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> torch.distributed.get_rank() <span class="op">==</span> <span class="dv">0</span></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> save0(<span class="op">*</span>args, <span class="op">**</span>kwargs):</span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Pass the given arguments to `torch.save`, but only on the root</span></span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a><span class="co">    process.</span></span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a><span class="co">    &quot;&quot;&quot;</span></span>
+<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a>    <span class="co"># We do *not* want to write to the same location with multiple</span></span>
+<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a>    <span class="co"># processes at the same time.</span></span>
+<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> is_root_process():</span>
+<span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a>        torch.save(<span class="op">*</span>args, <span class="op">**</span>kwargs)</span></code></pre></div>
 </section>
 <section id="destroy-process-group" class="slide level2">
 <h2>Destroy Process Group</h2>
@@ -839,9 +932,9 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb29-1"><a h
 <ul>
 <li class="fragment"><p>At <strong>line 142</strong>, destroy every
 process group and backend by calling destroy_process_group()</p>
-<div class="sourceCode" id="cb30"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Destroy the process group to clean up resources</span></span>
-<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>destroy_process_group()</span></code></pre></div></li>
+<div class="sourceCode" id="cb29"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Destroy the process group to clean up resources</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>destroy_process_group()</span></code></pre></div></li>
 </ul></li>
 </ul>
 </section>
@@ -849,11 +942,11 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb30-1"><a h
 <h2>Destroy Process Group</h2>
 <p>The method <strong>destroy_process_group</strong> is defined in
 <strong><code>distributed_utils.py</code></strong></p>
-<div class="sourceCode" id="cb31"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> destroy_process_group():</span>
-<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Destroy the process group.&quot;&quot;&quot;</span></span>
-<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> torch.distributed.is_initialized():</span>
-<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>        torch.distributed.destroy_process_group()</span></code></pre></div>
+<div class="sourceCode" id="cb30"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> destroy_process_group():</span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Destroy the process group.&quot;&quot;&quot;</span></span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> torch.distributed.is_initialized():</span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>        torch.distributed.destroy_process_group()</span></code></pre></div>
 </section>
 <section id="we-are-almost-there" class="slide level2">
 <h2>We are almost there</h2>
@@ -873,13 +966,13 @@ file:</p>
 <ul>
 <li class="fragment"><p>At line 3, increase the number of GPUs to 4 if
 it is not already done.</p>
-<div class="sourceCode" id="cb32"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co">#SBATCH --gres=gpu:4</span></span></code></pre></div></li>
+<div class="sourceCode" id="cb31"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="co">#SBATCH --gres=gpu:4</span></span></code></pre></div></li>
 <li class="fragment"><p>At line 19, pass the correct number of
 devices.</p>
-<div class="sourceCode" id="cb33"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Set up four visible GPUs that the job can use </span></span>
-<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">CUDA_VISIBLE_DEVICES</span><span class="op">=</span>0,1,2,3</span></code></pre></div></li>
+<div class="sourceCode" id="cb32"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Set up four visible GPUs that the job can use </span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">CUDA_VISIBLE_DEVICES</span><span class="op">=</span>0,1,2,3</span></code></pre></div></li>
 </ul></li>
 </ul>
 </section>
@@ -894,14 +987,14 @@ file:</p>
 communication over the system.</p>
 <ul>
 <li class="fragment"><p>At line 22, add the following:</p>
-<div class="sourceCode" id="cb34"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extracts the first hostname from the list of allocated nodes to use as the master address.</span></span>
-<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a><span class="va">MASTER_ADDR</span><span class="op">=</span><span class="st">&quot;</span><span class="va">$(</span><span class="ex">scontrol</span> show hostnames <span class="st">&quot;</span><span class="va">$SLURM_JOB_NODELIST</span><span class="st">&quot;</span> <span class="kw">|</span> <span class="fu">head</span> <span class="at">-n</span> 1<span class="va">)</span><span class="st">&quot;</span></span>
-<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Modifies the master address to allow communication over InfiniBand cells.</span></span>
-<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a><span class="va">MASTER_ADDR</span><span class="op">=</span><span class="st">&quot;</span><span class="va">${MASTER_ADDR}</span><span class="st">i&quot;</span></span>
-<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Get IP for hostname.</span></span>
-<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">MASTER_ADDR</span><span class="op">=</span><span class="st">&quot;</span><span class="va">$(</span><span class="ex">nslookup</span> <span class="st">&quot;</span><span class="va">$MASTER_ADDR</span><span class="st">&quot;</span> <span class="kw">|</span> <span class="fu">grep</span> <span class="at">-oP</span> <span class="st">&#39;(?&lt;=Address: ).*&#39;</span><span class="va">)</span><span class="st">&quot;</span></span>
-<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">MASTER_PORT</span><span class="op">=</span>7010</span></code></pre></div></li>
+<div class="sourceCode" id="cb33"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extracts the first hostname from the list of allocated nodes to use as the master address.</span></span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a><span class="va">MASTER_ADDR</span><span class="op">=</span><span class="st">&quot;</span><span class="va">$(</span><span class="ex">scontrol</span> show hostnames <span class="st">&quot;</span><span class="va">$SLURM_JOB_NODELIST</span><span class="st">&quot;</span> <span class="kw">|</span> <span class="fu">head</span> <span class="at">-n</span> 1<span class="va">)</span><span class="st">&quot;</span></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Modifies the master address to allow communication over InfiniBand cells.</span></span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a><span class="va">MASTER_ADDR</span><span class="op">=</span><span class="st">&quot;</span><span class="va">${MASTER_ADDR}</span><span class="st">i&quot;</span></span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Get IP for hostname.</span></span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">MASTER_ADDR</span><span class="op">=</span><span class="st">&quot;</span><span class="va">$(</span><span class="ex">nslookup</span> <span class="st">&quot;</span><span class="va">$MASTER_ADDR</span><span class="st">&quot;</span> <span class="kw">|</span> <span class="fu">grep</span> <span class="at">-oP</span> <span class="st">&#39;(?&lt;=Address: ).*&#39;</span><span class="va">)</span><span class="st">&quot;</span></span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">MASTER_PORT</span><span class="op">=</span>7010</span></code></pre></div></li>
 </ul></li>
 </ul>
 </section>
@@ -915,20 +1008,20 @@ file:</p>
 <ul>
 <li class="fragment"><p>We <strong>remove</strong> the lauching script
 at line 41:</p>
-<div class="sourceCode" id="cb35"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="ex">srun</span> <span class="at">--cpu_bind</span><span class="op">=</span>none python to_distributed_training.py </span></code></pre></div></li>
+<div class="sourceCode" id="cb34"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="ex">srun</span> <span class="at">--cpu_bind</span><span class="op">=</span>none python to_distributed_training.py </span></code></pre></div></li>
 <li class="fragment"><p>We use <strong>torchrun_jsc</strong> instead and
 pass the following argument:</p>
-<div class="sourceCode" id="cb36"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Launch a distributed training job across multiple nodes and GPUs</span></span>
-<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a><span class="ex">srun</span> <span class="at">--cpu_bind</span><span class="op">=</span>none bash <span class="at">-c</span> <span class="st">&quot;torchrun_jsc </span><span class="dt">\</span></span>
-<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a><span class="st">    --nnodes=</span><span class="va">$SLURM_NNODES</span><span class="st"> </span><span class="dt">\</span></span>
-<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a><span class="st">    --rdzv_backend c10d </span><span class="dt">\</span></span>
-<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a><span class="st">    --nproc_per_node=gpu </span><span class="dt">\</span></span>
-<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a><span class="st">    --rdzv_id </span><span class="va">$RANDOM</span><span class="st"> </span><span class="dt">\</span></span>
-<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a><span class="st">    --rdzv_endpoint=</span><span class="va">$MASTER_ADDR</span><span class="st">:</span><span class="va">$MASTER_PORT</span><span class="st"> </span><span class="dt">\</span></span>
-<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a><span class="st">    --rdzv_conf=is_host=</span><span class="dt">\$</span><span class="st">(if ((SLURM_NODEID)); then echo 0; else echo 1; fi) </span><span class="dt">\</span></span>
-<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a><span class="st">    to_distributed_training.py &quot;</span></span></code></pre></div></li>
+<div class="sourceCode" id="cb35"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Launch a distributed training job across multiple nodes and GPUs</span></span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a><span class="ex">srun</span> <span class="at">--cpu_bind</span><span class="op">=</span>none bash <span class="at">-c</span> <span class="st">&quot;torchrun_jsc </span><span class="dt">\</span></span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a><span class="st">    --nnodes=</span><span class="va">$SLURM_NNODES</span><span class="st"> </span><span class="dt">\</span></span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a><span class="st">    --rdzv_backend c10d </span><span class="dt">\</span></span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a><span class="st">    --nproc_per_node=gpu </span><span class="dt">\</span></span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a><span class="st">    --rdzv_id </span><span class="va">$RANDOM</span><span class="st"> </span><span class="dt">\</span></span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a><span class="st">    --rdzv_endpoint=</span><span class="va">$MASTER_ADDR</span><span class="st">:</span><span class="va">$MASTER_PORT</span><span class="st"> </span><span class="dt">\</span></span>
+<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a><span class="st">    --rdzv_conf=is_host=</span><span class="dt">\$</span><span class="st">(if ((SLURM_NODEID)); then echo 0; else echo 1; fi) </span><span class="dt">\</span></span>
+<span id="cb35-9"><a href="#cb35-9" aria-hidden="true" tabindex="-1"></a><span class="st">    to_distributed_training.py &quot;</span></span></code></pre></div></li>
 </ul></li>
 </ul>
 </section>
@@ -963,8 +1056,8 @@ setup of communication among the nodes.</li>
 <h2>done ✅</h2>
 <ul>
 <li class="fragment"><p>You can finally run:</p>
-<div class="sourceCode" id="cb37"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="ex">sbatch</span> run_to_distributed_training.sbatch</span></code></pre></div></li>
+<div class="sourceCode" id="cb36"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="ex">sbatch</span> run_to_distributed_training.sbatch</span></code></pre></div></li>
 </ul>
 </section>
 <section id="llview-4" class="slide level2">
@@ -995,13 +1088,13 @@ training (25m vs 1h32m with one GPU)</p></li>
 <li class="fragment"><p><strong>TODO 17</strong>💻📝: in
 <strong><code>run_to_distributed_training.sbatch</code></strong> at line
 2, you can increase the number of nodes to 2:</p>
-<div class="sourceCode" id="cb38"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="co">#SBATCH --nodes=2</span></span></code></pre></div></li>
+<div class="sourceCode" id="cb37"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="co">#SBATCH --nodes=2</span></span></code></pre></div></li>
 <li class="fragment"><p>Hence, you will use 8 GPUs for
 training.</p></li>
 <li class="fragment"><p>Run again:</p>
-<div class="sourceCode" id="cb39"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="ex">sbatch</span> run_to_distributed_training.sbatch</span></code></pre></div></li>
+<div class="sourceCode" id="cb38"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="ex">sbatch</span> run_to_distributed_training.sbatch</span></code></pre></div></li>
 </ul>
 </section>
 <section id="llview-6" class="slide level2">
@@ -1250,21 +1343,21 @@ class="slide level2">
 <strong>Delete</strong> lines 102–107 that wrap the model in
 DistributedDataParallel, and instead wrap the model using
 torch.distributed.fsdp.</p>
-<div class="sourceCode" id="cb40"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Unlike DDP, we should apply fully_shard to both submodules and the root model.</span></span>
-<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Here, we apply fully_shard to each TransformerEncoder and TransformerDecoder block,</span></span>
-<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a><span class="co"># and then to the root model.</span></span>
-<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>fsdp_kwargs <span class="op">=</span> {}</span>
-<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> module <span class="kw">in</span> model.modules():</span>
-<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">isinstance</span>(module, (</span>
-<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a>            torch.nn.TransformerEncoder, </span>
-<span id="cb40-8"><a href="#cb40-8" aria-hidden="true" tabindex="-1"></a>            torch.nn.TransformerDecoder,)</span>
-<span id="cb40-9"><a href="#cb40-9" aria-hidden="true" tabindex="-1"></a>        ):</span>
-<span id="cb40-10"><a href="#cb40-10" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Each TransformerEncoder and TransformerDecoder block is treated as a separate FSDP unit.</span></span>
-<span id="cb40-11"><a href="#cb40-11" aria-hidden="true" tabindex="-1"></a>        torch.distributed.fsdp.fully_shard(module, <span class="op">**</span>fsdp_kwargs)</span>
-<span id="cb40-12"><a href="#cb40-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb40-13"><a href="#cb40-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Identifies all parameters not already wrapped and groups them into a shardable unit.</span></span>
-<span id="cb40-14"><a href="#cb40-14" aria-hidden="true" tabindex="-1"></a>torch.distributed.fsdp.fully_shard(model, <span class="op">**</span>fsdp_kwargs)</span></code></pre></div></li>
+<div class="sourceCode" id="cb39"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Unlike DDP, we should apply fully_shard to both submodules and the root model.</span></span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Here, we apply fully_shard to each TransformerEncoder and TransformerDecoder block,</span></span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a><span class="co"># and then to the root model.</span></span>
+<span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a>fsdp_kwargs <span class="op">=</span> {}</span>
+<span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> module <span class="kw">in</span> model.modules():</span>
+<span id="cb39-6"><a href="#cb39-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">isinstance</span>(module, (</span>
+<span id="cb39-7"><a href="#cb39-7" aria-hidden="true" tabindex="-1"></a>            torch.nn.TransformerEncoder, </span>
+<span id="cb39-8"><a href="#cb39-8" aria-hidden="true" tabindex="-1"></a>            torch.nn.TransformerDecoder,)</span>
+<span id="cb39-9"><a href="#cb39-9" aria-hidden="true" tabindex="-1"></a>        ):</span>
+<span id="cb39-10"><a href="#cb39-10" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Each TransformerEncoder and TransformerDecoder block is treated as a separate FSDP unit.</span></span>
+<span id="cb39-11"><a href="#cb39-11" aria-hidden="true" tabindex="-1"></a>        torch.distributed.fsdp.fully_shard(module, <span class="op">**</span>fsdp_kwargs)</span>
+<span id="cb39-12"><a href="#cb39-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-13"><a href="#cb39-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Identifies all parameters not already wrapped and groups them into a shardable unit.</span></span>
+<span id="cb39-14"><a href="#cb39-14" aria-hidden="true" tabindex="-1"></a>torch.distributed.fsdp.fully_shard(model, <span class="op">**</span>fsdp_kwargs)</span></code></pre></div></li>
 </ul>
 </section>
 <section id="save-model-state" class="slide level2">
@@ -1274,14 +1367,14 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb40-1"><a h
 <ul>
 <li class="fragment"><p><strong>Remove</strong> lines 137 to 139 and
 <strong>replace</strong> them with:</p>
-<div class="sourceCode" id="cb41"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Save sharded model and optimizer</span></span>
-<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>save_sharded_model(model, optimizer, <span class="st">&#39;model_best&#39;</span>)</span></code></pre></div></li>
+<div class="sourceCode" id="cb40"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Save sharded model and optimizer</span></span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>save_sharded_model(model, optimizer, <span class="st">&#39;model_best&#39;</span>)</span></code></pre></div></li>
 <li class="fragment"><p><strong>Remove</strong> lines 145 to 147 and
 <strong>replace</strong> them with:</p>
-<div class="sourceCode" id="cb42"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Save sharded model and optimizer</span></span>
-<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>save_sharded_model(model, optimizer, <span class="st">&#39;model_final&#39;</span>)</span></code></pre></div></li>
+<div class="sourceCode" id="cb41"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Save sharded model and optimizer</span></span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>save_sharded_model(model, optimizer, <span class="st">&#39;model_final&#39;</span>)</span></code></pre></div></li>
 </ul></li>
 </ul>
 </section>
@@ -1323,29 +1416,29 @@ allocate its data first and DCP uses that storage instead.</li>
 method with <strong>full_state_dict=True</strong> and
 <strong>cpu_offload=True</strong> to all-gathers tensors and offload
 them to CPU. No ShardedTensor will be in the returned state_dict.</p>
-<div class="sourceCode" id="cb43"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> save_full_model(model, optimizer<span class="op">=</span><span class="va">None</span>, <span class="op">*</span>args, <span class="op">**</span>kwargs):</span>
-<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Stream all model parameters to rank 0 on the CPU, then pass all</span></span>
-<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a><span class="co">    other given arguments to `torch.save` to save the model, but only on</span></span>
-<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a><span class="co">    the root process.</span></span>
-<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a><span class="co">    &quot;&quot;&quot;</span></span>
-<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a>    state_dict_options <span class="op">=</span> dist_state_dict.StateDictOptions(</span>
-<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a>        full_state_dict<span class="op">=</span><span class="va">True</span>,</span>
-<span id="cb43-8"><a href="#cb43-8" aria-hidden="true" tabindex="-1"></a>        cpu_offload<span class="op">=</span><span class="va">True</span>,</span>
-<span id="cb43-9"><a href="#cb43-9" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb43-10"><a href="#cb43-10" aria-hidden="true" tabindex="-1"></a>    cpu_state_dict <span class="op">=</span> dist_state_dict.get_model_state_dict(</span>
-<span id="cb43-11"><a href="#cb43-11" aria-hidden="true" tabindex="-1"></a>        model,</span>
-<span id="cb43-12"><a href="#cb43-12" aria-hidden="true" tabindex="-1"></a>        options<span class="op">=</span>state_dict_options,</span>
-<span id="cb43-13"><a href="#cb43-13" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb43-14"><a href="#cb43-14" aria-hidden="true" tabindex="-1"></a>    cpu_state <span class="op">=</span> {<span class="st">&#39;model&#39;</span>: cpu_state_dict}</span>
-<span id="cb43-15"><a href="#cb43-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> optimizer <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
-<span id="cb43-16"><a href="#cb43-16" aria-hidden="true" tabindex="-1"></a>        optim_state_dict <span class="op">=</span> dist_state_dict.get_optimizer_state_dict(</span>
-<span id="cb43-17"><a href="#cb43-17" aria-hidden="true" tabindex="-1"></a>            model,</span>
-<span id="cb43-18"><a href="#cb43-18" aria-hidden="true" tabindex="-1"></a>            optimizer,</span>
-<span id="cb43-19"><a href="#cb43-19" aria-hidden="true" tabindex="-1"></a>            options<span class="op">=</span>state_dict_options,</span>
-<span id="cb43-20"><a href="#cb43-20" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb43-21"><a href="#cb43-21" aria-hidden="true" tabindex="-1"></a>        cpu_state[<span class="st">&#39;optimizer&#39;</span>] <span class="op">=</span> optim_state_dict</span>
-<span id="cb43-22"><a href="#cb43-22" aria-hidden="true" tabindex="-1"></a>    save0(cpu_state, <span class="op">*</span>args, <span class="op">**</span>kwargs)</span></code></pre></div></li>
+<div class="sourceCode" id="cb42"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> save_full_model(model, optimizer<span class="op">=</span><span class="va">None</span>, <span class="op">*</span>args, <span class="op">**</span>kwargs):</span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Stream all model parameters to rank 0 on the CPU, then pass all</span></span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a><span class="co">    other given arguments to `torch.save` to save the model, but only on</span></span>
+<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a><span class="co">    the root process.</span></span>
+<span id="cb42-5"><a href="#cb42-5" aria-hidden="true" tabindex="-1"></a><span class="co">    &quot;&quot;&quot;</span></span>
+<span id="cb42-6"><a href="#cb42-6" aria-hidden="true" tabindex="-1"></a>    state_dict_options <span class="op">=</span> dist_state_dict.StateDictOptions(</span>
+<span id="cb42-7"><a href="#cb42-7" aria-hidden="true" tabindex="-1"></a>        full_state_dict<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb42-8"><a href="#cb42-8" aria-hidden="true" tabindex="-1"></a>        cpu_offload<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb42-9"><a href="#cb42-9" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb42-10"><a href="#cb42-10" aria-hidden="true" tabindex="-1"></a>    cpu_state_dict <span class="op">=</span> dist_state_dict.get_model_state_dict(</span>
+<span id="cb42-11"><a href="#cb42-11" aria-hidden="true" tabindex="-1"></a>        model,</span>
+<span id="cb42-12"><a href="#cb42-12" aria-hidden="true" tabindex="-1"></a>        options<span class="op">=</span>state_dict_options,</span>
+<span id="cb42-13"><a href="#cb42-13" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb42-14"><a href="#cb42-14" aria-hidden="true" tabindex="-1"></a>    cpu_state <span class="op">=</span> {<span class="st">&#39;model&#39;</span>: cpu_state_dict}</span>
+<span id="cb42-15"><a href="#cb42-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> optimizer <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
+<span id="cb42-16"><a href="#cb42-16" aria-hidden="true" tabindex="-1"></a>        optim_state_dict <span class="op">=</span> dist_state_dict.get_optimizer_state_dict(</span>
+<span id="cb42-17"><a href="#cb42-17" aria-hidden="true" tabindex="-1"></a>            model,</span>
+<span id="cb42-18"><a href="#cb42-18" aria-hidden="true" tabindex="-1"></a>            optimizer,</span>
+<span id="cb42-19"><a href="#cb42-19" aria-hidden="true" tabindex="-1"></a>            options<span class="op">=</span>state_dict_options,</span>
+<span id="cb42-20"><a href="#cb42-20" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb42-21"><a href="#cb42-21" aria-hidden="true" tabindex="-1"></a>        cpu_state[<span class="st">&#39;optimizer&#39;</span>] <span class="op">=</span> optim_state_dict</span>
+<span id="cb42-22"><a href="#cb42-22" aria-hidden="true" tabindex="-1"></a>    save0(cpu_state, <span class="op">*</span>args, <span class="op">**</span>kwargs)</span></code></pre></div></li>
 </ul>
 </section>
 <section id="save-sharded-model" class="slide level2">
@@ -1354,32 +1447,32 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb43-1"><a h
 <li class="fragment"><p>We use the <strong>get_model_state_dict</strong>
 again, but with <strong>full_state_dict=False</strong> and
 <strong>cpu_offload=False</strong>.</p>
-<div class="sourceCode" id="cb44"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> save_sharded_model(model, optimizer<span class="op">=</span><span class="va">None</span>, save_dir<span class="op">=</span><span class="st">&#39;checkpoints&#39;</span>):</span>
-<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Obtain sharded model parameters from the GPU, then save the model</span></span>
-<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a><span class="co">    as a distributed checkpoint to the given directory. Saving a</span></span>
-<span id="cb44-4"><a href="#cb44-4" aria-hidden="true" tabindex="-1"></a><span class="co">    distributed checkpoint means that the checkpoint will be split into</span></span>
-<span id="cb44-5"><a href="#cb44-5" aria-hidden="true" tabindex="-1"></a><span class="co">    individual files, one for each process.</span></span>
-<span id="cb44-6"><a href="#cb44-6" aria-hidden="true" tabindex="-1"></a><span class="co">    &quot;&quot;&quot;</span></span>
-<span id="cb44-7"><a href="#cb44-7" aria-hidden="true" tabindex="-1"></a>    state_dict_options <span class="op">=</span> dist_state_dict.StateDictOptions(</span>
-<span id="cb44-8"><a href="#cb44-8" aria-hidden="true" tabindex="-1"></a>        cpu_offload<span class="op">=</span><span class="va">False</span>,</span>
-<span id="cb44-9"><a href="#cb44-9" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb44-10"><a href="#cb44-10" aria-hidden="true" tabindex="-1"></a>    model_state_dict <span class="op">=</span> dist_state_dict.get_model_state_dict(</span>
-<span id="cb44-11"><a href="#cb44-11" aria-hidden="true" tabindex="-1"></a>        model,</span>
-<span id="cb44-12"><a href="#cb44-12" aria-hidden="true" tabindex="-1"></a>        options<span class="op">=</span>state_dict_options,</span>
-<span id="cb44-13"><a href="#cb44-13" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb44-14"><a href="#cb44-14" aria-hidden="true" tabindex="-1"></a>    cp_state_dict <span class="op">=</span> {<span class="st">&#39;model&#39;</span>: model_state_dict}</span>
-<span id="cb44-15"><a href="#cb44-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> optimizer <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
-<span id="cb44-16"><a href="#cb44-16" aria-hidden="true" tabindex="-1"></a>        optim_state_dict <span class="op">=</span> dist_state_dict.get_optimizer_state_dict(</span>
-<span id="cb44-17"><a href="#cb44-17" aria-hidden="true" tabindex="-1"></a>            model,</span>
-<span id="cb44-18"><a href="#cb44-18" aria-hidden="true" tabindex="-1"></a>            optimizer,</span>
-<span id="cb44-19"><a href="#cb44-19" aria-hidden="true" tabindex="-1"></a>            options<span class="op">=</span>state_dict_options,</span>
-<span id="cb44-20"><a href="#cb44-20" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb44-21"><a href="#cb44-21" aria-hidden="true" tabindex="-1"></a>        cp_state_dict[<span class="st">&#39;optimizer&#39;</span>] <span class="op">=</span> optim_state_dict</span>
-<span id="cb44-22"><a href="#cb44-22" aria-hidden="true" tabindex="-1"></a>    dcp.save(</span>
-<span id="cb44-23"><a href="#cb44-23" aria-hidden="true" tabindex="-1"></a>        cp_state_dict,</span>
-<span id="cb44-24"><a href="#cb44-24" aria-hidden="true" tabindex="-1"></a>        storage_writer<span class="op">=</span>dcp.FileSystemWriter(save_dir, overwrite<span class="op">=</span><span class="va">True</span>),</span>
-<span id="cb44-25"><a href="#cb44-25" aria-hidden="true" tabindex="-1"></a>    )</span></code></pre></div></li>
+<div class="sourceCode" id="cb43"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> save_sharded_model(model, optimizer<span class="op">=</span><span class="va">None</span>, save_dir<span class="op">=</span><span class="st">&#39;checkpoints&#39;</span>):</span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Obtain sharded model parameters from the GPU, then save the model</span></span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a><span class="co">    as a distributed checkpoint to the given directory. Saving a</span></span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a><span class="co">    distributed checkpoint means that the checkpoint will be split into</span></span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a><span class="co">    individual files, one for each process.</span></span>
+<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a><span class="co">    &quot;&quot;&quot;</span></span>
+<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a>    state_dict_options <span class="op">=</span> dist_state_dict.StateDictOptions(</span>
+<span id="cb43-8"><a href="#cb43-8" aria-hidden="true" tabindex="-1"></a>        cpu_offload<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb43-9"><a href="#cb43-9" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb43-10"><a href="#cb43-10" aria-hidden="true" tabindex="-1"></a>    model_state_dict <span class="op">=</span> dist_state_dict.get_model_state_dict(</span>
+<span id="cb43-11"><a href="#cb43-11" aria-hidden="true" tabindex="-1"></a>        model,</span>
+<span id="cb43-12"><a href="#cb43-12" aria-hidden="true" tabindex="-1"></a>        options<span class="op">=</span>state_dict_options,</span>
+<span id="cb43-13"><a href="#cb43-13" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb43-14"><a href="#cb43-14" aria-hidden="true" tabindex="-1"></a>    cp_state_dict <span class="op">=</span> {<span class="st">&#39;model&#39;</span>: model_state_dict}</span>
+<span id="cb43-15"><a href="#cb43-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> optimizer <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
+<span id="cb43-16"><a href="#cb43-16" aria-hidden="true" tabindex="-1"></a>        optim_state_dict <span class="op">=</span> dist_state_dict.get_optimizer_state_dict(</span>
+<span id="cb43-17"><a href="#cb43-17" aria-hidden="true" tabindex="-1"></a>            model,</span>
+<span id="cb43-18"><a href="#cb43-18" aria-hidden="true" tabindex="-1"></a>            optimizer,</span>
+<span id="cb43-19"><a href="#cb43-19" aria-hidden="true" tabindex="-1"></a>            options<span class="op">=</span>state_dict_options,</span>
+<span id="cb43-20"><a href="#cb43-20" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb43-21"><a href="#cb43-21" aria-hidden="true" tabindex="-1"></a>        cp_state_dict[<span class="st">&#39;optimizer&#39;</span>] <span class="op">=</span> optim_state_dict</span>
+<span id="cb43-22"><a href="#cb43-22" aria-hidden="true" tabindex="-1"></a>    dcp.save(</span>
+<span id="cb43-23"><a href="#cb43-23" aria-hidden="true" tabindex="-1"></a>        cp_state_dict,</span>
+<span id="cb43-24"><a href="#cb43-24" aria-hidden="true" tabindex="-1"></a>        storage_writer<span class="op">=</span>dcp.FileSystemWriter(save_dir, overwrite<span class="op">=</span><span class="va">True</span>),</span>
+<span id="cb43-25"><a href="#cb43-25" aria-hidden="true" tabindex="-1"></a>    )</span></code></pre></div></li>
 </ul>
 </section>
 <section id="run-your-training" class="slide level2">
@@ -1387,8 +1480,8 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb44-1"><a h
 <ul>
 <li class="fragment"><p>You can run the same sbatch file without any
 modification.</p>
-<div class="sourceCode" id="cb45"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="ex">sbatch</span> run_to_fsdp_training.sbatch</span></code></pre></div></li>
+<div class="sourceCode" id="cb44"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a><span class="ex">sbatch</span> run_to_fsdp_training.sbatch</span></code></pre></div></li>
 </ul>
 </section>
 <section id="llview-7" class="slide level2">
