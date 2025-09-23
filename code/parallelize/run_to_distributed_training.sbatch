@@ -3,13 +3,13 @@
 #SBATCH --gres=gpu:1 ## TODO 14: Set the number of GPUs to use for training.
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=128
-#SBATCH --account=training2529
+#SBATCH --account=atmlaml
 #SBATCH --partition=dc-gpu
 #SBATCH --time=03:00:00
 #SBATCH --output=%j.out
 #SBATCH --error=%j.err
 
-#SBATCH --reservation=training2529 # For today only
+##SBATCH --reservation=training2529 # For today only
 
 # Export the necessary environment variables for huggingface offline mode
 export HF_DATASETS_OFFLINE=1
@@ -35,4 +35,4 @@ source $HOME/course/sc_venv_template/activate.sh
 # --rdzv_endpoint=$MASTER_ADDR:$MASTER_PORT that specifies the address and port for the rendezvous server
 # --rdzv_conf=is_host=$(if ((SLURM_NODEID)); then echo 0; else echo 1; fi) that configures whether the node is the rendezvous host based on its SLURM ID
 # train.py that runs the training script using the specified distributed setup
-srun --cpu_bind=none python to_distributed_training.py 
+srun --cpu_bind=none python tp_example.py
